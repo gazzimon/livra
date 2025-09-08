@@ -1,0 +1,14 @@
+/* apps/web/src/app/globals.css */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Personalización básica */
+body {
+  @apply bg-gray-50 text-gray-900;
+}
+
+nav {
+  @apply bg-white shadow;
+}

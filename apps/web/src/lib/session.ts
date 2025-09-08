@@ -1,4 +1,3 @@
-// src/lib/session.ts
 import { cookies } from 'next/headers'
 import { SignJWT, jwtVerify } from 'jose'
 
@@ -17,7 +16,9 @@ export async function verifySession(token: string) {
   return payload
 }
 
-// 🔑 Nuevo: getSession para usar en Server Components
+/**
+ * Devuelve la sesión actual desde la cookie, o null si no hay o es inválida
+ */
 export async function getSession() {
   const token = cookies().get('livra_session')?.value
   if (!token) return null
@@ -28,7 +29,9 @@ export async function getSession() {
   }
 }
 
-// 🔑 Nuevo: clearSessionCookie para logout
+/**
+ * Limpia la cookie de sesión (para logout)
+ */
 export async function clearSessionCookie() {
   cookies().set('livra_session', '', { path: '/', httpOnly: true, maxAge: 0 })
 }
