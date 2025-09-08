@@ -17,15 +17,10 @@ export default function LoginOTPPage() {
     setLoading(true);
     try {
       const magic = getMagic();
-      if (!magic) throw new Error('Magic no disponible en este entorno');
-
-      // 1) Enviar OTP al email
-      // Opción A: UI propia: pedimos el código y luego llamamos loginWithEmailOTP({ email, otp })
-      // Opción B: UI de Magic: magic.auth.loginWithEmailOTP({ email, showUI: true }) y listo.
-      // Aquí usamos UI PROPIA:
-      // @ts-ignore - algunos tipos del SDK aún son beta en OTP
-      await magic.auth.loginWithEmailOTP({ email, /* showUI: false */ });
-
+      if (!magic) throw new Error('Magic no disponible');
+      // Enviar OTP por email (sin UI de Magic)
+      // @ts-ignore (OTP puede estar en beta de tipos)
+      await magic.auth.loginWithEmailOTP({ email, showUI: false });
       setStep('check-inbox');
       setMsg('Te enviamos un código de 6 dígitos al email.');
     } catch (err: any) {
@@ -42,15 +37,12 @@ export default function LoginOTPPage() {
     try {
       const magic = getMagic();
       if (!magic) throw new Error('Magic no disponible');
+      // Verificar OTP con UI propia
+      // @ts-ignore
+      await magic.auth.loginWithEmailOTP({ email, otp, showUI: false });
 
-      // 2) Verificar el OTP y crear sesión de Magic (cliente)
-      // @ts-ignore - algunos tipos del SDK aún son beta en OTP
-      const res = await magic.auth.loginWithEmailOTP({ email, otp });
-
-      // 3) Obtener DID Token (esto “cuenta” el login ante Magic)
+      // Obtener DID y crear sesión en tu backend
       const didToken = await magic.user.getIdToken({ lifespan: 900 });
-
-      // 4) Crear sesión del backend (cookie httpOnly)
       const r = await fetch('/auth/session', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + didToken },
@@ -59,7 +51,6 @@ export default function LoginOTPPage() {
         const j = await r.json().catch(() => ({}));
         throw new Error(j?.error || 'No se pudo crear la sesión');
       }
-
       router.replace('/demo');
     } catch (err: any) {
       setMsg(err?.message || 'Error verificando el código');
@@ -69,43 +60,42 @@ export default function LoginOTPPage() {
   };
 
   return (
-    <main style={{ maxWidth: 420, margin: '60px auto', padding: 16 }}>
+    <main style={{ maxWidth: 460, margin: '60px auto', padding: 16, textAlign: 'center' }}>
       <h1>Ingresar con Email OTP</h1>
 
       {step === 'ask-email' && (
-        <form onSubmit={sendCode} style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+        <form onSubmit={sendCode} style={{ display: 'grid', gap: 12, marginTop: 16 }}>
           <input
             type="email"
+            placeholder="tu@correo.com"
             value={email}
             onChange={(e)=>setEmail(e.target.value)}
-            placeholder="tu@correo.com"
             required
             style={{ padding: 10, border: '1px solid #ccc', borderRadius: 8 }}
           />
-          <button type="submit" disabled={loading}>
-            {loading ? 'Enviando…' : 'Enviar código'}
-          </button>
+          <button type="submit" disabled={loading || !email}> {loading ? 'Enviando…' : 'Enviar código'} </button>
         </form>
       )}
 
       {step === 'check-inbox' && (
-        <form onSubmit={verifyCode} style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+        <form onSubmit={verifyCode} style={{ display: 'grid', gap: 12, marginTop: 16 }}>
           <input
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
+            placeholder="Código de 6 dígitos"
             value={otp}
             onChange={(e)=>setOtp(e.target.value)}
-            placeholder="Código de 6 dígitos"
             required
             style={{ padding: 10, border: '1px solid #ccc', borderRadius: 8, letterSpacing: 2 }}
           />
-          <button type="submit" disabled={loading || otp.length < 4}>
+          <button type="submit" disabled={loading || otp.length < 6}>
             {loading ? 'Verificando…' : 'Verificar código'}
           </button>
-          <button type="button" disabled={loading} onClick={()=>setStep('ask-email')} style={{ opacity: .7 }}>
+          <button type="button" disabled={loading} onClick={()=>setStep('ask-email')} style={{ opacity:.75 }}>
             Reingresar email
           </button>
+          <p style={{ opacity:.8 }}>Te enviamos un código de 6 dígitos al email: <b>{email}</b></p>
         </form>
       )}
 
