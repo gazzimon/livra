@@ -14,13 +14,13 @@ export default function LoginPage() {
       setLoading(true)
       const magic = getMagic()
 
-      // 🔑 Magic envía OTP al mail
-      await magic.auth.loginWithEmailOTP({ email })
+      // 🔑 Paso 1: Magic manda el OTP al correo e inmediatamente abre su modal
+      await magic?.auth.loginWithEmailOTP({ email, showUI: true })
 
-      // 🔑 Cuando el usuario ingresa el OTP en el mail → obtenés el DID
-      const didToken = await magic.user.getIdToken()
+      // 🔑 Paso 2: cuando el usuario ingresa el código en el modal, el login queda válido
+      const didToken = await magic?.user.getIdToken()
 
-      // 🔑 Guardás sesión en tu backend
+      // 🔑 Paso 3: mandás el DID a tu backend para crear cookie de sesión
       const res = await fetch('/auth/session', {
         method: 'POST',
         headers: { Authorization: `Bearer ${didToken}` },
@@ -28,7 +28,8 @@ export default function LoginPage() {
 
       if (!res.ok) throw new Error('Login failed')
 
-      router.replace('/demo') // después de login vas a demo
+      // 🔑 Paso 4: redirigir al dashboard o demo
+      router.replace('/demo')
     } catch (err) {
       console.error(err)
       alert('Error al iniciar sesión')
@@ -54,7 +55,7 @@ export default function LoginPage() {
           disabled={!email || loading}
           className="bg-black text-white rounded-md py-2"
         >
-          {loading ? 'Enviando…' : 'Enviar código'}
+          {loading ? 'Esperando OTP…' : 'Enviar código'}
         </button>
       </div>
     </main>

@@ -1,4 +1,3 @@
-// apps/web/src/middleware.ts
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
@@ -6,10 +5,24 @@ import { jwtVerify } from 'jose'
 const secret = new TextEncoder().encode(process.env.JWT_SECRET!)
 
 export async function middleware(req: NextRequest) {
-  if (req.nextUrl.pathname.startsWith('/auth')) return NextResponse.next()
+  const { pathname } = req.nextUrl
 
+  // ✅ Rutas públicas → no requieren login
+  if (
+    pathname.startsWith('/auth') ||         // login, logout, session
+    pathname.startsWith('/api') ||          // APIs abiertas
+    pathname.startsWith('/_next') ||        // archivos Next.js
+    pathname.startsWith('/favicon.ico') ||  // íconos
+    pathname.startsWith('/assets')          // si tenés assets estáticos
+  ) {
+    return NextResponse.next()
+  }
+
+  // ✅ Revisar cookie de sesión
   const token = req.cookies.get('livra_session')?.value
-  if (!token) return NextResponse.redirect(new URL('/auth/login', req.url))
+  if (!token) {
+    return NextResponse.redirect(new URL('/auth/login', req.url))
+  }
 
   try {
     await jwtVerify(token, secret)
@@ -19,4 +32,7 @@ export async function middleware(req: NextRequest) {
   }
 }
 
-export const config = { matcher: ['/((?!_next).*)'] }
+// ✅ Matcher: todo menos archivos estáticos
+export const config = {
+  matcher: ['/((?!_next|favicon.ico|assets).*)'],
+}
