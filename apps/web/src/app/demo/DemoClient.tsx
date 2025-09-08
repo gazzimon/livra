@@ -1,5 +1,6 @@
 'use client';
 import React, { useRef, useState } from 'react';
+import { getMagic } from '@/lib/magicClient';
 
 function toHex(buf: ArrayBuffer) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -9,6 +10,8 @@ export default function DemoClient() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [text, setText] = useState('');
   const [hash, setHash] = useState<string>('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string>('');
 
   const drawStart: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
     const canvas = canvasRef.current!;
@@ -27,43 +30,68 @@ export default function DemoClient() {
   const drawEnd: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
     const canvas = canvasRef.current!;
     canvas.onpointermove = null;
-    canvas.releasePointerCapture(e.pointerId);
+    try { canvas.releasePointerCapture(e.pointerId); } catch {}
   };
+
   const clear = () => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHash('');
+    setMsg('');
   };
 
   const computeHash = async () => {
-    const canvas = canvasRef.current!;
-    const png = canvas.toDataURL('image/png'); // MVP
-    const enc = new TextEncoder();
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const pepper = process.env.NEXT_PUBLIC_PEPPER || 'LIVRA_MINI';
-    const bytes = new Uint8Array([
-      ...enc.encode(text.trim()),
-      ...enc.encode(png),
-      ...salt,
-      ...enc.encode(pepper),
-    ]);
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    setHash(toHex(digest));
+    setBusy(true);
+    setMsg('');
+    try {
+      const canvas = canvasRef.current!;
+      const png = canvas.toDataURL('image/png'); // MVP (luego podemos pasar a SVG canónico)
+      const enc = new TextEncoder();
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const pepper = process.env.NEXT_PUBLIC_PEPPER || 'LIVRA_MINI';
+      const bytes = new Uint8Array([
+        ...enc.encode(text.trim()),
+        ...enc.encode(png),
+        ...salt,
+        ...enc.encode(pepper),
+      ]);
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      setHash(toHex(digest));
+    } catch (e: any) {
+      setMsg(e?.message || 'Error generando hash');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const anchor = async () => {
     if (!hash) return;
-    const res = await fetch('/api/anchor', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ hash, signers: [], meta: { demo: true } }),
-    });
-    const j = await res.json();
-    alert(res.ok ? `Anchored: ${j.chain ?? 'local'} ${j.txHash ?? j.file}` : `Error: ${j.error}`);
+    setBusy(true);
+    setMsg('');
+    try {
+      const res = await fetch('/api/anchor', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hash, signers: [], meta: { demo: true } }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || 'Error anclando');
+      setMsg(`Anchored: ${j.chain ?? 'local'} ${j.txHash ?? j.file}`);
+    } catch (e: any) {
+      setMsg(e?.message || 'Error anclando');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    // 1) borra cookie en el backend
+    await fetch('/auth/logout', { method: 'POST' });
+    // 2) opcional: cierra sesión en el SDK de Magic (en este navegador)
+    const magic = getMagic();
+    await magic?.user.logout();
+    // 3) redirige al login
     window.location.href = '/auth/login';
   };
 
@@ -86,7 +114,7 @@ export default function DemoClient() {
       <div style={{ border: '1px solid #ddd', padding: 12, borderRadius: 8 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
           <strong>Firma manuscrita</strong>
-          <button onClick={clear}>Limpiar</button>
+          <button onClick={clear} disabled={busy}>Limpiar</button>
         </div>
         <canvas
           ref={canvasRef}
@@ -96,17 +124,18 @@ export default function DemoClient() {
           onPointerDown={drawStart}
           onPointerUp={drawEnd}
           onPointerLeave={drawEnd}
+          onPointerCancel={drawEnd}
         />
       </div>
 
-      <div style={{ marginTop: 16, display:'flex', gap:12, flexWrap:'wrap' }}>
-        <button onClick={computeHash}>Generar hash</button>
-        <button onClick={anchor} disabled={!hash}>Anclar (local)</button>
-        {hash && <>
-          <code style={{ wordBreak:'break-all' }}>H_final: {hash}</code>
-          <div><a href={`/verify/${hash}`} target="_blank">Verificar anclaje</a></div>
-        </>}
+      <div style={{ marginTop: 16, display:'flex', gap:12, flexWrap:'wrap', alignItems:'center' }}>
+        <button onClick={computeHash} disabled={busy}>Generar hash</button>
+        <button onClick={anchor} disabled={!hash || busy}>Anclar (local)</button>
+        {hash && <code style={{ wordBreak:'break-all' }}>H_final: {hash}</code>}
+        {hash && <a href={`/verify/${hash}`} target="_blank" rel="noreferrer">Verificar anclaje</a>}
       </div>
+
+      {msg && <p style={{ marginTop: 12 }}>{msg}</p>}
     </main>
   );
 }
