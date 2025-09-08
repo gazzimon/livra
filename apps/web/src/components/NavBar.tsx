@@ -46,6 +46,7 @@ export default function NavBar() {
 
       {user && (
         <div className="flex items-center gap-6">
+          {/* Info de usuario */}
           <div className="text-sm text-gray-700">
             {user.email && <span className="block font-medium">{user.email}</span>}
             {user.wallet && (
@@ -54,6 +55,16 @@ export default function NavBar() {
               </span>
             )}
           </div>
+
+          {/* 🔗 Nuevo link a Perfil */}
+          <a
+            href="/auth/profile"
+            className="text-sm text-indigo-600 hover:underline"
+          >
+            Perfil
+          </a>
+
+          {/* Botón de logout */}
           <button
             onClick={handleLogout}
             className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 text-sm"
