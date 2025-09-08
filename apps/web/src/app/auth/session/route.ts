@@ -1,25 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { magicAdmin } from '@/lib/magicAdmin';
-import { setSessionCookie } from '@/lib/session';
+import { NextRequest, NextResponse } from 'next/server'
+import { getMagicAdmin } from '@/lib/magicAdmin'
+import { signSession } from '@/lib/session'
 
 export async function POST(req: NextRequest) {
-  try {
-    const auth = req.headers.get('authorization') || '';
-    const didToken = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-    if (!didToken) return NextResponse.json({ error: 'DID token faltante' }, { status: 401 });
+  const did = req.headers.get('authorization')?.replace('Bearer ', '')
+  if (!did) return NextResponse.json({ error: 'No DID' }, { status: 401 })
 
-    await magicAdmin.token.validate(didToken);
-    const metadata = await magicAdmin.users.getMetadataByToken(didToken);
-    if (!metadata.issuer) return NextResponse.json({ error: 'Issuer inválido' }, { status: 401 });
+  const magic = getMagicAdmin()
+  await magic.token.validate(did)
+  const issuer = await magic.token.getIssuer(did)
+  const meta = await magic.users.getMetadataByToken(did)
 
-    await setSessionCookie({
-      sub: metadata.issuer,
-      email: metadata.email || null,
-      addr: metadata.publicAddress || null,
-    });
+  const jwt = await signSession({
+    sub: issuer,
+    email: meta.email,
+    wallet: meta.publicAddress,
+  })
 
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Error creando sesión' }, { status: 401 });
-  }
+  const res = NextResponse.json({ user: { issuer, email: meta.email } })
+  res.cookies.set('livra_session', jwt, {
+    httpOnly: true, secure: true, sameSite: 'lax', maxAge: 60 * 60 * 24 * 7,
+  })
+  return res
 }
