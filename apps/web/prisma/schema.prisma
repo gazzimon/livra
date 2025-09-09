@@ -1,0 +1,64 @@
+// apps/web/prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("PRISMA_DATABASE_URL") // o DATABASE_URL, como lo tengas
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  email              String?
+  wallet             String?
+  magicIssuer        String?             @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  // Umbral adaptativo para verificación de firma
+  thresholdFirma     Int?                // 65 | 75 | 85 ... (nullable hasta que lo fijemos)
+
+  signatures         UserSignature[]
+  contractSignatures ContractSignature[]
+}
+
+model UserSignature {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  // Hash del PNG (minimiza PII)
+  hash       String
+
+  // Dónde quedó almacenado el PNG (si lo guardas)
+  storageUrl String?
+
+  // Clasificación “X”: doodle/ruido
+  isX        Boolean  @default(false)
+
+  // Embedding (pgvector) — Prisma lo maneja como Unsupported
+  vector     Unsupported("vector")?
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model ContractSignature {
+  id         String   @id @default(cuid())
+  contractId String
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  hash       String
+  vector     Unsupported("vector")?
+  score      Float
+  isX        Boolean
+  result     String   // "POS" | "NEG"
+
+  createdAt  DateTime @default(now())
+
+  @@index([contractId, createdAt])
+}
